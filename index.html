@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids Subtraction Quiz - Audio Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --secondary: #FF9800;
+            --bg: #f0f8ff;
+            --text: #333;
+        }
+        body {
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; 
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+        h1 { color: var(--secondary); }
+        input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: 0.2s;
+        }
+        button:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+        button:disabled {
+            cursor: not-allowed;
+            transform: none;
+        }
+        .hidden { display: none !important; }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #555;
+        }
+        .question {
+            font-size: 56px;
+            margin: 20px 0;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        .options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .option-btn {
+            background-color: #e7f3fe;
+            color: #000;
+            border: 3px solid #2196F3;
+            font-size: 32px;
+            padding: 20px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+        .option-btn:hover:not(:disabled) {
+            background-color: #2196F3;
+            color: white;
+        }
+        .correct {
+            background-color: #4CAF50 !important;
+            color: white !important;
+            border-color: #4CAF50 !important;
+        }
+        .wrong {
+            background-color: #f44336 !important;
+            color: white !important;
+            border-color: #f44336 !important;
+            animation: shake 0.4s;
+        }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            50% { transform: translateX(8px); }
+            75% { transform: translateX(-8px); }
+            100% { transform: translateX(0); }
+        }
+        #status-message {
+            margin-top: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="setup-screen">
+        <h1>Math Time! 🧮</h1>
+        <p style="font-size: 20px;">Type your name to play:</p>
+        <input type="text" id="kid-name" placeholder="Your Name" required autocomplete="off">
+        <br>
+        <button onclick="startQuiz()">Let's Go!</button>
+    </div>
+
+    <div id="quiz-screen" class="hidden">
+        <div class="stats">
+            <div>Question: <span id="q-counter">1</span>/10</div>
+            <div>⏱️ <span id="timer">00:00</span></div>
+        </div>
+        <div class="question" id="question-text"></div>
+        <div class="options" id="options-container"></div>
+    </div>
+
+    <div id="result-screen" class="hidden">
+        <h1 style="font-size: 40px;">You Did It! 🎉</h1>
+        <h2>Awesome job, <span id="display-name"></span>!</h2>
+        <p style="font-size: 24px;">Score: <strong id="final-score"></strong> / 10</p>
+        <p style="font-size: 20px;">Time: <strong id="final-time"></strong></p>
+        
+        <div id="status-message">✅ Audio Test Complete! (Email Disabled)</div>
+        <br>
+        <button id="retry-btn" style="background-color: var(--secondary);" onclick="location.reload()">Play Again 🔄</button>
+    </div>
+</div>
+
+<script>
+    let currentQuestion = 0;
+    let score = 0;
+    let timerInterval;
+    let secondsElapsed = 0;
+    let correctAnswer = 0;
+    const totalQuestions = 10;
+    let kidName = "";
+    
+    // ======================================================================
+    // 🎵 THE BUILT-IN AUDIO ENGINE 🎵
+    // ======================================================================
+    let audioCtx;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    function playSound(type) {
+        if (!audioCtx) return;
+        
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        if (type === 'correct') {
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+            
+        } else if (type === 'wrong') {
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+            
+        } else if (type === 'cheer') {
+            const notes = [440, 554.37, 659.25, 880]; 
+            notes.forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = freq;
+
+                const startTime = audioCtx.currentTime + (i * 0.15);
+                gain.gain.setValueAtTime(0.1, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.4);
+
+                osc.start(startTime);
+                osc.stop(startTime + 0.4);
+            });
+        }
+    }
+    // ======================================================================
+
+    function startQuiz() {
+        kidName = document.getElementById('kid-name').value.trim();
+
+        if (!kidName) {
+            alert("Please type your name first! 😊");
+            return;
+        }
+        
+        // Wake up audio engine!
+        initAudio();
+
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('quiz-screen').classList.remove('hidden');
+        
+        startTimer();
+        generateQuestion();
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            secondsElapsed++;
+            const minutes = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+            const seconds = (secondsElapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `${minutes}:${seconds}`;
+        }, 1000);
+    }
+
+    function generateQuestion() {
+        let num1 = Math.floor(Math.random() * 90) + 10; 
+        let num2 = Math.floor(Math.random() * (num1 - 9)) + 10; 
+
+        correctAnswer = num1 - num2;
+        
+        document.getElementById('q-counter').innerText = currentQuestion + 1;
+        document.getElementById('question-text').innerText = `${num1} - ${num2} = ?`;
+
+        generateOptions(correctAnswer);
+    }
+
+    function generateOptions(correct) {
+        let options = [correct];
+        
+        while(options.length < 4) {
+            let offset = Math.floor(Math.random() * 20) - 10;
+            let wrongAnswer = correct + offset;
+            
+            if (wrongAnswer !== correct && wrongAnswer >= 0 && !options.includes(wrongAnswer)) {
+                options.push(wrongAnswer);
+            }
+        }
+
+        options.sort(() => Math.random() - 0.5);
+
+        const container = document.getElementById('options-container');
+        container.innerHTML = "";
+        
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt;
+            btn.onclick = () => checkAnswer(opt, btn);
+            container.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(selected, btnElement) {
+        const allButtons = document.querySelectorAll('.option-btn');
+        allButtons.forEach(b => b.disabled = true);
+
+        if (selected === correctAnswer) {
+            score++;
+            btnElement.classList.add('correct'); 
+            playSound('correct'); // Fire sound!
+            
+        } else {
+            btnElement.classList.add('wrong'); 
+            playSound('wrong'); // Fire sound!
+            
+            allButtons.forEach(b => {
+                if (parseInt(b.innerText) === correctAnswer) {
+                    b.classList.add('correct');
+                }
+            });
+        }
+        
+        setTimeout(() => {
+            currentQuestion++;
+            if (currentQuestion < totalQuestions) {
+                generateQuestion();
+            } else {
+                endQuiz();
+            }
+        }, 1000);
+    }
+
+    function endQuiz() {
+        clearInterval(timerInterval);
+        
+        document.getElementById('quiz-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        
+        const minutes = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+        const seconds = (secondsElapsed % 60).toString().padStart(2, '0');
+        const finalTimeStr = `${minutes}:${seconds}`;
+        
+        document.getElementById('display-name').innerText = kidName;
+        document.getElementById('final-score').innerText = score;
+        document.getElementById('final-time').innerText = finalTimeStr;
+
+        playSound('cheer'); // Fire sound!
+        triggerConfetti();
+    }
+
+    function triggerConfetti() {
+        var duration = 3 * 1000;
+        var animationEnd = Date.now() + duration;
+        var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+        function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+
+        var interval = setInterval(function() {
+            var timeLeft = animationEnd - Date.now();
+            if (timeLeft <= 0) { return clearInterval(interval); }
+            var particleCount = 50 * (timeLeft / duration);
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+        }, 250);
+    }
+</script>
+
+</body>
+</html>
